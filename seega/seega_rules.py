@@ -188,18 +188,18 @@ class SeegaRules(Rule):
                 if piece != (board.board_shape[0] // 2, board.board_shape[1] // 2):
                     if piece[0] == move[0]:
                         if piece[1] < move[1] and 0 <= piece[1] - 1 < board.board_shape[0] and \
-                                board.get_cell_color((piece[0], piece[1] - 1)) == board.get_cell_color(move):
+                                board.get_cell_color((piece[0], piece[1] - 1)) == Color(player):
                             captured_pieces.append(piece)
 
                         if piece[1] > move[1] and 0 <= piece[1] + 1 < board.board_shape[0] and \
-                                board.get_cell_color((piece[0], piece[1] + 1)) == board.get_cell_color(piece):
+                                board.get_cell_color((piece[0], piece[1] + 1)) == Color(player):
                             captured_pieces.append(piece)
                     if piece[1] == move[1]:
                         if piece[0] < move[0] and 0 <= piece[0] - 1 < board.board_shape[0] and \
-                                board.get_cell_color((piece[0] - 1, piece[1])) == board.get_cell_color(move):
+                                board.get_cell_color((piece[0] - 1, piece[1])) == Color(player):
                             captured_pieces.append(piece)
                         if piece[0] > move[0] and 0 <= piece[0] + 1 < board.board_shape[0] and \
-                                board.get_cell_color((piece[0] + 1, piece[1])) == board.get_cell_color(move):
+                                board.get_cell_color((piece[0] + 1, piece[1])) == Color(player):
                             captured_pieces.append(piece)
 
         return captured_pieces
