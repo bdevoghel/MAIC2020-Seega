@@ -198,7 +198,7 @@ class SeegaRules(Rule):
                         if piece[0] < move[0] and 0 <= piece[0] - 1 < board.board_shape[0] and \
                                 board.get_cell_color((piece[0] - 1, piece[1])) == board.get_cell_color(move):
                             captured_pieces.append(piece)
-                        if piece[0] < move[0] and 0 <= piece[0] + 1 < board.board_shape[0] and \
+                        if piece[0] > move[0] and 0 <= piece[0] + 1 < board.board_shape[0] and \
                                 board.get_cell_color((piece[0] + 1, piece[1])) == board.get_cell_color(move):
                             captured_pieces.append(piece)
 
