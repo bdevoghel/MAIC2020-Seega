@@ -154,6 +154,8 @@ class SeegaGUI(QMainWindow):
         self.board.enable_all_squares()
         self.panel.reset_panel_player()
         self.board.current_player = -1
+        self.current_player = self.first_player
+        self.panel.update_current_player(self.current_player)
 
         self.state = SeegaState(board=self.board.get_board_state(), next_player=self.first_player,
                                boring_limit=self.just_stop)
@@ -241,6 +243,7 @@ class SeegaGUI(QMainWindow):
                     self.app.processEvents()
                     time.sleep(self.sleep_time)
                     self.board_gui.remove_piece(p)
+                    self.app.processEvents()
             self.app.processEvents()
             time.sleep(self.sleep_time)
         self.panel.update_score(self.state.score, self.state.in_hand)
