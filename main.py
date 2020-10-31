@@ -56,8 +56,8 @@ if __name__ == '__main__':
     if None in agents:
         raise Exception('Problems in  AI players instances. \n'
                         'Usage:\n'
-                        '-t time credited \n'
-                        '\t total number of seconds credited to each player \n'
+                        '-t allowed time for each ai \n'
+                        '\t total number of seconds credited to each agent \n'
                         '-ai0 ai0_file.py \n'
                         '\t path to the ai that will play as player 0 \n'
                         '-ai1 ai1_file.py\n'
