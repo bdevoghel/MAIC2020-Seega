@@ -37,7 +37,7 @@ class SeegaGUI(QMainWindow):
         self.first_player = first_player
         self.just_stop = boring_limit
 
-        self.setWindowTitle("[*] MAIC 2019 - Seega Game")
+        self.setWindowTitle("[*] MAIC 2018 - Seega Game")
         self.statusBar()
         self.setWindowIcon(QtGui.QIcon("assets/icon.png"))
         layout = QHBoxLayout()
@@ -248,7 +248,9 @@ class SeegaGUI(QMainWindow):
                 for p in self.state.captured :
                     i, j = p
                     self.board_gui.squares[i][j].set_background_color("red")
+                    self.app.processEvents()
                     self.board_gui.remove_piece(p)
+            time.sleep(self.sleep_time / 2)
             self.app.processEvents()
         self.panel.update_score(self.state.score, self.state.in_hand)
         self.board_gui.set_default_colors()
@@ -323,7 +325,7 @@ class SeegaGUI(QMainWindow):
         box.about(self, "Rules", rules)
 
     def about_trigger(self):
-        about = "MAIC 2019 Seega Game by MIFY and AAAI Benin"
+        about = "MAIC 2018 Seega Game by MIFY and AAAI Benin"
         box = QMessageBox()
         box.about(self, "About", about)
 
