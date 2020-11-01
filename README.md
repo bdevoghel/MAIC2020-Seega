@@ -26,7 +26,7 @@ pip install -r requirements.txt
 
 ### Run the code
 
-Firstly, just clone this repository or download the zip to get everything you need to work and just run by following the instructions.
+Firstly, just clone this repository or download the zip to get everything you need to work and just run by following the instructions. Get exemple AI at ./seega/random_agent.py
 
 
 **Usage:**
@@ -48,7 +48,10 @@ Firstly, just clone this repository or download the zip to get everything you ne
 
         git clone https://github.com/Machine-Intelligence-For-You/MAIC2019.git
         cd MAIC2020-Seega/
-        python main.py -ai0 ai_0.py -ai1 ai_1.py -s 0.5
+        python main.py -ai0 ai_0.py -ai1 ai_1.py -s 1.5
+
+        python main.py -ai0 ./seega/random_agent.py -ai1 ./seega/random_agent.py -s 1.5
+
 
 
 
@@ -58,4 +61,7 @@ Now to run it you will have to use another file which is **main.py** with the sa
 
 **Example:**
 
-         python main.py -ai0 ai_0.py -ai1 ai_1.py -s 0.5 -t 120
+         python main.py -ai0 ai_0.py -ai1 ai_1.py -s 1.5 -t 120
+
+         python main.py -ai0 ./seega/random_agent.py -ai1 ./seega/random_agent.py -s 1.5 -t 120
+

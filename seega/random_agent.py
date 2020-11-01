@@ -16,8 +16,9 @@ class AI(Player):
         super(AI, self).__init__(color)
         self.position = color.value
 
-    def play(self, state):
+    def play(self, state, remain_time):
         print(f"Player {self.position} is playing.")
+        print("time remain is ", remain_time, " seconds")
         return SeegaRules.random_play(state, self.position)
 
     def set_score(self, new_score):

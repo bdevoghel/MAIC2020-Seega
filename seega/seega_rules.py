@@ -166,7 +166,8 @@ class SeegaRules(Rule):
         import random
         print("Player, ", player)
         actions = SeegaRules.get_player_actions(state, player)
-        return random.choice(actions)
+        choose = random.choice(actions)
+        return choose
 
 
     @staticmethod
