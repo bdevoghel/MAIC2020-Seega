@@ -142,6 +142,7 @@ class SeegaGUI(QMainWindow):
                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if new_game == QMessageBox.Yes:
             self._reset_for_new_game()
+            self.app.processEvents()
             self.play_game()
         else:
             pass
@@ -238,13 +239,16 @@ class SeegaGUI(QMainWindow):
             time.sleep(self.sleep_time / 2)
             self.board_gui.set_default_colors()
             self.board_gui.squares[to[0]][to[1]].set_background_color("green")
+            self.app.processEvents()
+            time.sleep(self.sleep_time / 2)
             self.board_gui.move_piece(at, to, self.state.get_latest_player())
+            self.board_gui.set_default_colors()
+            time.sleep(self.sleep_time / 2)
             if self.state.captured is not None:
                 for p in self.state.captured :
                     i, j = p
                     self.board_gui.squares[i][j].set_background_color("red")
                     self.board_gui.remove_piece(p)
-            time.sleep(self.sleep_time / 2)
             self.app.processEvents()
         self.panel.update_score(self.state.score, self.state.in_hand)
         self.board_gui.set_default_colors()
