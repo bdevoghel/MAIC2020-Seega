@@ -259,6 +259,8 @@ class SeegaRules(Rule):
         Returns:
             bool: True if the given state is the final. False if not.
         """
+        if state.phase == 1:
+            return False
         if SeegaRules.is_boring(state):
             return True
         latest_player_score = state.score[state.get_latest_player()]
