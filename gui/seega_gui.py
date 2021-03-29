@@ -176,7 +176,6 @@ class SeegaGUI(QMainWindow):
         """
         assert isinstance(action, SeegaAction), "action has to be an Action class object"
         result = SeegaRules.act(self.state, action, self.current_player)
-        print(result)
         if isinstance(result, bool):
             return False
         else:

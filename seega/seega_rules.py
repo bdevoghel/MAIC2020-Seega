@@ -25,6 +25,10 @@ class SeegaRules(Rule):
                             and not state.get_board().is_center(action['action']['to']):
                         return True
             elif phase == 2:
+                if SeegaRules.is_player_stuck(state, player * -1):
+                    if action['action']['at'] in SeegaRules.get_unstucked_piece(state, player * -1):
+                        return True
+                    return False
                 if state.get_next_player() == player:
                     if action['action_type'] == SeegaActionType.MOVE:
                         if state.get_board().get_cell_color(action['action']['at']) == Color(player):
@@ -165,9 +169,24 @@ class SeegaRules(Rule):
         """
         import random
         print("Player, ", player)
-        actions = SeegaRules.get_player_actions(state, player)
+        actions = SeegaRules.get_player_all_cases_actions(state, player)
         choose = random.choice(actions)
         return choose
+
+    @staticmethod
+    def get_player_all_cases_actions(state, player):
+        if state.phase == 2 and SeegaRules.is_player_stuck(state, player * -1):
+            actions = list()
+            piece_to_move = SeegaRules.get_unstucked_piece(state, player * -1)
+            for piece in piece_to_move:
+                moves = SeegaRules.get_effective_cell_moves(state, piece)
+                if moves:
+                    for move in moves:
+                        actions.append(SeegaAction(action_type=SeegaActionType.MOVE, at=piece, to=move))
+            return actions
+        else:
+            return SeegaRules.get_player_actions(state, player)
+
 
 
     @staticmethod
@@ -294,3 +313,21 @@ class SeegaRules(Rule):
             tie = True
         return {'tie': tie, 'winner': max(state.score, key=state.score.get),
                 'score': state.score}
+
+    @staticmethod
+    def get_unstucked_piece(state, player):
+        board = state.get_board()
+        player_pieces = board.get_player_pieces_on_board(Color(player))
+        piece_to_move = set()
+        for piece in player_pieces:
+            opponent_pieces = SeegaRules._get_opponent_neighbours(board, piece, player)
+            if len(opponent_pieces) > 0:
+                for opp_piece in opponent_pieces:
+                    if len(SeegaRules.get_effective_cell_moves(state, opp_piece)) > 0:
+                        piece_to_move.add(opp_piece)
+        return list(piece_to_move)
+
+
+
+
+
