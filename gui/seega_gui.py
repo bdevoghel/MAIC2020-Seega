@@ -176,6 +176,7 @@ class SeegaGUI(QMainWindow):
         """
         assert isinstance(action, SeegaAction), "action has to be an Action class object"
         result = SeegaRules.act(self.state, action, self.current_player)
+        print(result)
         if isinstance(result, bool):
             return False
         else:
@@ -195,6 +196,12 @@ class SeegaGUI(QMainWindow):
             state = deepcopy(self.state)
             remain_time = timer_first_player.remain_time() if turn == -1 else timer_second_player.remain_time()
             remain_time_copy = deepcopy(remain_time)
+            if SeegaRules.is_player_stuck(state, turn):
+                state.set_next_player(turn * -1)
+                self.state.set_next_player(turn * -1)
+                turn = turn * -1
+                self.current_player = state.get_next_player()
+                self._update_gui()
             if remain_time > 0:
                 timer_first_player.start() if turn == -1 else timer_second_player.start()
                 action = self.players[turn].play(state, remain_time_copy)
