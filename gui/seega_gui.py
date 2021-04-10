@@ -174,7 +174,8 @@ class SeegaGUI(QMainWindow):
         Returns:
             bool: Dependent on the validity of the action will return True if the was was performed False if not.
         """
-        assert isinstance(action, SeegaAction), "action has to be an Action class object"
+        if not isinstance(action, SeegaAction):  # "action has to be an Action class object"
+            return False
         result = SeegaRules.act(self.state, action, self.current_player)
         if isinstance(result, bool):
             return False
@@ -206,11 +207,13 @@ class SeegaGUI(QMainWindow):
                     print("An illegal move were given. Performing a random move")
                     print(f"Lunching a random move for {turn}")
                     action = SeegaRules.random_play(state, turn)  # TODO: Should we use the original state?
+                    self.step(action)
 
             else:
                 print("Not remain time for ", turn, " Performing a random move")
                 print(f"Lunching a random move for {turn}")
                 action = SeegaRules.random_play(state, turn)  # TODO: Should we use the original state?
+                self.step(action)
             self._update_gui()
             self.trace.add(self.state)
             self.players[turn].update_player_infos(self.get_player_info(turn))

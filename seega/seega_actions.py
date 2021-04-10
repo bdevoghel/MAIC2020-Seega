@@ -38,7 +38,7 @@ class SeegaAction(Action):
         self.action = kwargs
 
     def __repr__(self):
-        return str(self.get_action_as_dict())
+        return str(self.get_json_action())
 
     def get_action_as_dict(self):
         return {'action_type': self.action_type,

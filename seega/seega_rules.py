@@ -164,7 +164,6 @@ class SeegaRules(Rule):
             action : An action
         """
         import random
-        print("Player, ", player)
         actions = SeegaRules.get_player_actions(state, player)
         choose = random.choice(actions)
         return choose

@@ -24,11 +24,12 @@ class Player(object):
     def get_name(self):
         return self.name
 
-    def play(self, state):
         """The main fonction that has to be implemented. Given a state it has to return a legal action for the player
+    def play(self, state, remaining_time):
 
         Args:
             state (YoteState): A state object from the yote game.
+            remaining_time (int): Time left to agent to play
 
         Raises:
             NotImplementedError: [description]
