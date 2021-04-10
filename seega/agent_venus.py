@@ -4,6 +4,7 @@ from seega.seega_rules import SeegaRules
 from seega.seega_actions import SeegaAction, SeegaActionType
 from seega_state import SeegaState
 
+from functools import lru_cache
 from copy import deepcopy
 from time import time
 
@@ -104,16 +105,12 @@ class AI(Player):
         self.repeat_boring_moves = False
         self.last_action = None
 
-        self.cache_successors = {'hits': 0, 'misses': 0}
-
     def play(self, state, remaining_time):
         self.move_nb += 1
         state.__class__ = State
         print(f"\nPlayer {self.ME} is playing with {remaining_time} seconds remaining for move #{self.move_nb}")
-        print(f"CacheInfo : "
-              f"hits={self.cache_successors['hits']}, "
-              f"misses={self.cache_successors['misses']}, "
-              f"currsize={len(self.cache_successors) - 2}")
+        print(f"- Cache successors : {self.successors.cache_info()}")
+        print(f"- Cache evaluate   : {self.evaluate.cache_info()}")
         print(f"{state} evaluation={self.evaluate(state):.2f}\n")
 
         if self.repeat_boring_moves:  # fast-forward to save time
@@ -142,15 +139,12 @@ class AI(Player):
         self.last_action = best_action
         return best_action
 
+    @lru_cache(maxsize=None)
     def successors(self, state: SeegaState):
         """
         The successors function must return (or yield) a list of
         pairs (a, s) in which a is the action played to reach the state s.
         """
-        if state in self.cache_successors:
-            self.cache_successors['hits'] += 1
-            return self.cache_successors[state]
-
         next_player = state.get_next_player()
         possible_actions = SeegaRules.get_player_actions(state, next_player)
         succ = []
@@ -158,8 +152,6 @@ class AI(Player):
             next_state, done = SeegaRules.make_move(deepcopy(state), action, next_player)
             succ.append((action, next_state))
 
-        self.cache_successors['misses'] += 1
-        self.cache_successors[state] = succ
         return succ
 
     def sort_successors(self, succ, maximize):
@@ -180,7 +172,7 @@ class AI(Player):
         return cutoff
         # TODO cut states that are too bad
 
-    # TODO to memoize
+    @lru_cache(maxsize=None)
     def evaluate(self, state, details=False):
         """
         The evaluate function returns a value representing the utility function of the board.
