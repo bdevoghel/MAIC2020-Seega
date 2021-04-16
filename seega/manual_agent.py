@@ -24,7 +24,7 @@ class AI(Player):
     """
     The successors function must return (or yield) a list of
     pairs (a, s) in which a is the action played to reach the
-    sstate s.
+    state s.
     """
     def successors(self, state):
         possible_actions = SeegaRules.get_player_actions(state, self.color.value)
@@ -82,7 +82,7 @@ def minimax_search(state, player, prune=True):
     """Perform a MiniMax/AlphaBeta search and return the best action.
 
     Arguments:
-    sstate -- initial sstate
+    state -- initial state
     player -- a concrete instance of class AI implementing an Alpha-Beta player
     prune -- whether to use AlphaBeta pruning
 

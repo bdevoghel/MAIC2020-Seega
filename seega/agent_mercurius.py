@@ -266,9 +266,9 @@ class AI(Player):
 
     def reverse_last_move(self, state):
         """
-        Returns the move resulting in the previous sstate, allowing for (boring) self-play
+        Returns the move resulting in the previous state, allowing for (boring) self-play
         """
-        # TODO use self.last_action instead of sstate last action (in case last move was performed by opponent)
+        # TODO use self.last_action instead of state last action (in case last move was performed by opponent)
         last_move = state.get_latest_move()
         next_move = SeegaAction(action_type=SeegaActionType.MOVE,
                                 at=last_move['action']['to'],
@@ -296,7 +296,7 @@ def minimax_search(state, player):
     Perform a MiniMax/AlphaBeta search and return the best action using Alpha-Beta pruning.
 
     Arguments:
-    sstate -- initial sstate
+    state -- initial state
     player -- a concrete instance of class AI implementing an Alpha-Beta player
 
     MiniMax and AlphaBeta algorithms.
