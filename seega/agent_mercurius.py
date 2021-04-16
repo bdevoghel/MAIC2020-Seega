@@ -116,11 +116,12 @@ class AI(Player):
               f"currsize={len(self.cache_successors) - 2}")
         print(f"{state} evaluation={self.evaluate(state):.2f}\n")
 
-        if self.repeat_boring_moves:  # fast-forward to save time
-            assert state.get_latest_player() == self.ME, \
-                " - ERROR : May not repeat boring moves, latest player isn't self"
-            print(" - PLAYING BOREDOM")
-            return self.reverse_last_move(state)
+        # TODO remove obsolete since stuck player fix
+        # if self.repeat_boring_moves:  # fast-forward to save time
+        #     assert state.get_latest_player() == self.ME, \
+        #         " - ERROR : May not repeat boring moves, latest player isn't self"
+        #     print(" - PLAYING BOREDOM")
+        #     return self.reverse_last_move(state)
 
         if self.max_time is None:
             self.max_time = remaining_time
@@ -133,10 +134,10 @@ class AI(Player):
         elif state.phase == 1:
             best_action = SeegaRules.random_play(state, self.ME)  # TODO play smart during phase 1
         else:  # phase == 2
-            if self.can_start_self_play(state):
-                best_action = self.make_self_play_move(state, fallback_function=self.iterative_deepening)
-            else:
-                best_action = self.iterative_deepening(state)
+            # TODO remove obsolete since stuck player fix
+            # if self.can_start_self_play(state):
+            #     best_action = self.make_self_play_move(state, fallback_function=self.iterative_deepening)
+            best_action = self.iterative_deepening(state)
 
         print(f" - SELECTED ACTION : {best_action}")
         self.last_action = best_action
@@ -240,7 +241,7 @@ class AI(Player):
         If state is winnable by repeating boring moves, set repeat_boring_moves to True and return True
         """
         # TODO do not do self_play if game can be won by exploring whole search tree till end (and win)
-        other_actions = SeegaRules.get_player_actions(state, self.OTHER)
+        other_actions = SeegaRules.get_player_all_cases_actions(state, self.OTHER)
         pieces_captured = self.evaluate(state, details=True)['captured']  # TODO optimize (no need to compute whole eval)
         if pieces_captured == state.MAX_SCORE - 1:  # other has only one piece left
             print("OTHER HAS ONLY ONE PIECE LEFT")

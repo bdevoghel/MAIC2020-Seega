@@ -11,7 +11,8 @@ from time import time
 import numpy as np
 
 inf = float("inf")
-absolute_max_depth = 30  # TODO remove (was for debugging)
+winning_value = 1000
+absolute_max_depth = 100  # TODO remove (was for debugging)
 
 
 # TODO
@@ -28,6 +29,21 @@ absolute_max_depth = 30  # TODO remove (was for debugging)
     successors.cache_info()
 
 """
+
+
+@lru_cache(maxsize=None)
+def get_possible_actions(state, player_id):
+    return SeegaRules.get_player_all_cases_actions(state, player_id)
+
+
+@lru_cache(maxsize=None)
+def is_end_game(state):
+    return SeegaRules.is_end_game(state)
+
+
+@lru_cache(maxsize=None)
+def is_player_stuck(state, player_id):
+    return SeegaRules.is_player_stuck(state, player_id)
 
 
 class State(SeegaState):
@@ -113,27 +129,29 @@ class AI(Player):
         print(f"- Cache evaluate   : {self.evaluate.cache_info()}")
         print(f"{state} evaluation={self.evaluate(state):.2f}\n")
 
-        if self.repeat_boring_moves:  # fast-forward to save time
-            assert state.get_latest_player() == self.ME, \
-                " - ERROR : May not repeat boring moves, latest player isn't self"
-            print(" - PLAYING BOREDOM")
-            return self.reverse_last_move(state)
+        # TODO remove obsolete since stuck player fix ; solution : create barrier when having upperhand
+        #  compute if state is safe but still has pieces to move, if upperhand : self_play
+        # if self.repeat_boring_moves:  # fast-forward to save time
+        #     assert state.get_latest_player() == self.ME, \
+        #         " - ERROR : May not repeat boring moves, latest player isn't self"
+        #     print(" - PLAYING BOREDOM")
+        #     return self.reverse_last_move(state)
 
         if self.max_time is None:
             self.max_time = remaining_time
             self.typical_time = remaining_time / self.max_nb_moves
         self.remaining_time = remaining_time
 
-        possible_actions = SeegaRules.get_player_actions(state, self.color.value)
+        possible_actions = get_possible_actions(state, self.ME)
         if len(possible_actions) == 1:
             best_action = possible_actions[0]
         elif state.phase == 1:
             best_action = SeegaRules.random_play(state, self.ME)  # TODO play smart during phase 1
         else:  # phase == 2
-            if self.can_start_self_play(state):
-                best_action = self.make_self_play_move(state, fallback_function=self.iterative_deepening)
-            else:
-                best_action = self.iterative_deepening(state)
+            # TODO remove obsolete since stuck player fix
+            # if self.can_start_self_play(state):
+            #     best_action = self.make_self_play_move(state, fallback_function=self.iterative_deepening)
+            best_action = self.iterative_deepening(state)
 
         print(f" - SELECTED ACTION : {best_action}")
         self.last_action = best_action
@@ -146,7 +164,7 @@ class AI(Player):
         pairs (a, s) in which a is the action played to reach the state s.
         """
         next_player = state.get_next_player()
-        possible_actions = SeegaRules.get_player_actions(state, next_player)
+        possible_actions = get_possible_actions(state, next_player)
         succ = []
         for action in possible_actions:
             next_state, done = SeegaRules.make_move(deepcopy(state), action, next_player)
@@ -232,7 +250,7 @@ class AI(Player):
         If state is winnable by repeating boring moves, set repeat_boring_moves to True and return True
         """
         # TODO do not do self_play if game can be won by exploring whole search tree till end (and win)
-        other_actions = SeegaRules.get_player_actions(state, self.OTHER)
+        other_actions = get_possible_actions(state, self.OTHER)
         pieces_captured = self.evaluate(state, details=True)['captured']  # TODO optimize (no need to compute whole eval)
         if pieces_captured == state.MAX_SCORE - 1:  # other has only one piece left
             print("OTHER HAS ONLY ONE PIECE LEFT")
@@ -248,7 +266,7 @@ class AI(Player):
 
     def make_self_play_move(self, state, fallback_function):
         for action, s in self.successors(state):
-            if SeegaRules.is_player_stuck(s, self.OTHER):
+            if is_player_stuck(s, self.OTHER):
                 print(" - SELF PLAY MOVE FOUND")
                 return action
 
@@ -258,9 +276,9 @@ class AI(Player):
 
     def reverse_last_move(self, state):
         """
-        Returns the move resulting in the previous sstate, allowing for (boring) self-play
+        Returns the move resulting in the previous state, allowing for (boring) self-play
         """
-        # TODO use self.last_action instead of sstate last action (in case last move was performed by opponent)
+        # TODO use self.last_action instead of state last action (in case last move was performed by opponent)
         last_move = state.get_latest_move()
         next_move = SeegaAction(action_type=SeegaActionType.MOVE,
                                 at=last_move['action']['to'],
@@ -288,7 +306,7 @@ def minimax_search(state, player):
     Perform a MiniMax/AlphaBeta search and return the best action using Alpha-Beta pruning.
 
     Arguments:
-    sstate -- initial sstate
+    state -- initial state
     player -- a concrete instance of class AI implementing an Alpha-Beta player
 
     MiniMax and AlphaBeta algorithms.
