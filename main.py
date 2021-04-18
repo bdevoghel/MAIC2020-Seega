@@ -25,11 +25,12 @@ if __name__ == '__main__':
     parser.add_argument('-ai0', help='path to the ai that will play as player 0')
     parser.add_argument('-ai1', help='path to the ai that will play as player 1')
     parser.add_argument('-s', help='time to show the board')
+    parser.add_argument('-imst', help='flag for immediate start, ignores -s argument', action='store_true')
     args = parser.parse_args()
 
     # set the time to play
     allowed_time = float(args.t) if args.t is not None else 120.0
-    sleep_time = float(args.s) if args.s is not None else 0.
+    sleep_time = float(args.s) if args.s is not None and not args.imst else 0.
 
     player_type = ['human', 'human']
     player_type[0] = args.ai0 if args.ai0 != None else 'human'
@@ -63,7 +64,15 @@ if __name__ == '__main__':
                         '-ai1 ai1_file.py\n'
                         '\t path to the ai that will play as player 1 \n'
                         '-s sleep time \n'
-                        '\t time(in second) to show the board(or move)')
-    game = SeegaGUI(app, (5, 5), agents, sleep_time=sleep_time, allowed_time=allowed_time)
+                        '\t time(in second) to show the board(or move)'
+                        '-imst immediate start \n'
+                        '\t flag for immediate start'
+                        )
+    game = SeegaGUI(app, (5, 5), agents,
+                    sleep_time=sleep_time,
+                    allowed_time=allowed_time,
+                    immediate_start=args.imst)
+    if args.imst:
+        sys.exit()
     game.show()
     sys.exit(app.exec_())

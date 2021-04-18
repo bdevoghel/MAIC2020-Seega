@@ -25,7 +25,7 @@ class SeegaGUI(QMainWindow):
     automatic_save_game = False
 
     def __init__(self, app, shape, players, allowed_time=120.0, sleep_time=.500, first_player=-1, boring_limit=200,
-                 parent=None):
+                 parent=None, immediate_start=False):
         super(SeegaGUI, self).__init__(parent)
         self.app = app
 
@@ -58,6 +58,10 @@ class SeegaGUI(QMainWindow):
         # self.trace = Trace(self.board.get_board_array())
 
         # self.random_player = AI(self.board.currentPlayer, self.board_size)
+
+        self.immediate_start = immediate_start
+        if immediate_start:
+            self.new_game_trigger()
 
     def _reset(self):
 
@@ -138,9 +142,10 @@ class SeegaGUI(QMainWindow):
         help_menu.addAction(about_action)
 
     def new_game_trigger(self):
-        new_game = QMessageBox.question(self, 'New Game', "You're about to start a new Game.",
-                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-        if new_game == QMessageBox.Yes:
+        if not self.immediate_start:
+            new_game = QMessageBox.question(self, 'New Game', "You're about to start a new Game.",
+                                            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if self.immediate_start or new_game == QMessageBox.Yes:
             self._reset_for_new_game()
             self.app.processEvents()
             self.play_game()
@@ -224,11 +229,18 @@ class SeegaGUI(QMainWindow):
             self.trace.add(self.state)
             self.players[turn].update_player_infos(self.get_player_info(turn))
             turn = self.state.get_next_player()
-        self._update_gui()
-        self._results()
-        self.save_game_trigger()
-        self.board_gui.set_default_colors()
+        if not self.immediate_start:
+            self._update_gui()
+            self._results()
+            self.save_game_trigger()
+            self.board_gui.set_default_colors()
+
         print("\nIt's over.")
+        results = SeegaRules.get_results(self.state)
+        if not results['tie']:
+            print(f"{self.players[results['winner']].name} wins.", results)
+        else:
+            print("No winners.")
 
     def _update_gui(self):
         action = self.state.get_latest_move()
