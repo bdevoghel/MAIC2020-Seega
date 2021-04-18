@@ -1,5 +1,5 @@
 from core.player import Player
-from core.board import Board
+from core import Color
 from seega.seega_rules import SeegaRules
 from seega.seega_actions import SeegaAction, SeegaActionType
 from seega_state import SeegaState
@@ -11,23 +11,13 @@ from time import time
 import numpy as np
 
 inf = float("inf")
-winning_value = 1000
-absolute_max_depth = 100  # TODO remove (was for debugging)
 
 
 # TODO
 """ NOTES
  - if several deepening iterations return same action, immediatly commit and do not go deeper
  - if action results in sufficient evaluation score gain, immediatly commit
- - if winning state is encountered, immediatly commit 
  - remove prints
- - add map from state to final evaluation
- 
- cache :     
-    from functools import lru_cache
-    @lru_cache(maxsize=int(1e6))  # TODO determine best size
-    successors.cache_info()
-
 """
 
 
@@ -48,10 +38,9 @@ def is_player_stuck(state, player_id):
 
 class State(SeegaState):
     def __repr__(self):
-        return str(self)
-        # return f"<State({self.phase}, {self.get_next_player()}, {self.board.get_board_state()})>"
+        return f"<State({self.phase}, {self.get_next_player()}, {self.board.get_board_state()})>"
 
-    def __str__(self):  # TODO optimize ?
+    def __str__(self):
         def display_black(string):
             string += f"   o : {(self.in_hand[-1] if self.phase == 1 else self.score[-1]):>2}"
             return string
@@ -95,12 +84,16 @@ class State(SeegaState):
                and np.array_equal(self.board.get_board_state(), other.board.get_board_state())
 
     def __hash__(self):
-        return hash((self.phase, self.get_next_player(), str(self.board.get_board_state())))  # TODO efficient to get str of np.array ?
+        return hash((self.phase, self.get_next_player(), self.board.get_board_state().tobytes()))
+        # NOTE : board.tobytes() is the fastest way to get the content to hash for a np array
+        #        timeit.timeit(lambda: hash(str(self.board.get_board_state())), number=int(1e4)))
+        #        timeit.timeit(lambda: hash(self.board.get_board_state().tobytes()), number=int(1e4)))
 
 
 class AI(Player):
 
     max_nb_moves = 100  # empirical
+    winning_value = 1000
 
     in_hand = 12
     score = 0
@@ -109,38 +102,45 @@ class AI(Player):
     def __init__(self, color):
         super(AI, self).__init__(color)
         self.ME = color.value
+        self.ME_color = color
         self.OTHER = -color.value
+        self.OTHER_color = Color(-color.value)
 
         self.max_time = None
         self.remaining_time = None
         self.typical_time = None
 
         self.move_nb = 0
-        self.max_depth = 1
+        self.exploring_depth_limit = 1
+        self.absolute_max_depth = 1000
 
         self.repeat_boring_moves = False
+        self.reached_win = False
         self.last_action = None
+        self.explored_nodes = 0
+
+        self.state_evaluations = dict()  # {state: (static_eval, dynamic_eval, dynamic_eval_depth)
+        self.current_eval = 0
 
     def play(self, state, remaining_time):
         self.move_nb += 1
         state.__class__ = State
         print(f"\nPlayer {self.ME} is playing with {remaining_time} seconds remaining for move #{self.move_nb}")
         print(f"- Cache successors : {self.successors.cache_info()}")
-        print(f"- Cache evaluate   : {self.evaluate.cache_info()}")
+        print(f"- Cache evaluate   : {self.static_evaluation.cache_info()}")
         print(f"{state} evaluation={self.evaluate(state):.2f}\n")
 
         # TODO remove obsolete since stuck player fix ; solution : create barrier when having upperhand
         #  compute if state is safe but still has pieces to move, if upperhand : self_play
         # if self.repeat_boring_moves:  # fast-forward to save time
-        #     assert state.get_latest_player() == self.ME, \
-        #         " - ERROR : May not repeat boring moves, latest player isn't self"
-        #     print(" - PLAYING BOREDOM")
-        #     return self.reverse_last_move(state)
+        #     print(" - PLAYING BARRIER")
+        #     return self.reverse_last_action()
 
         if self.max_time is None:
             self.max_time = remaining_time
             self.typical_time = remaining_time / self.max_nb_moves
         self.remaining_time = remaining_time
+        self.current_eval = self.evaluate(state)
 
         possible_actions = get_possible_actions(state, self.ME)
         if len(possible_actions) == 1:
@@ -172,77 +172,168 @@ class AI(Player):
 
         return succ
 
-    def sort_successors(self, succ, maximize):
-        return succ
-        # TODO ordering : from best to worst for the player wh'os turn it is at the position
-        # TODO follow principal variation https://youtu.be/zj3WsRyjkYM?t=815
+    def sort_successors(self, successors, maximize):
+        sorted_successors = sorted(successors,
+                                   key=lambda succ: self.evaluate(succ[1], static=False)
+                                                    + (1 if maximize else -1)
+                                                        * (self.winning_value if self.is_pv_move(succ) else 0),
+                                   reverse=maximize)
+        return sorted_successors
 
-    def sorted_successors(self, state, maximize=True):
+    def is_pv_move(self, successor):
+        """
+        Returns True if successor is on the Principal Variation
+        (see https://en.wikipedia.org/wiki/Principal_variation_search), False otherwise
+        """
+        return False  # TODO , see https://youtu.be/zj3WsRyjkYM?t=815
+
+    def sorted_successors(self, state, maximize):
         return self.sort_successors(self.successors(state), maximize)
 
     def cutoff(self, state, depth):
         """
         The cutoff function returns true if the alpha-beta/minimax search has to stop and false otherwise.
         """
-        game_over = SeegaRules.is_end_game(state)
-        max_depth = depth == self.max_depth or depth == absolute_max_depth
-        cutoff = game_over or max_depth
+        max_depth = depth == self.exploring_depth_limit or depth == self.absolute_max_depth
+        cutoff = max_depth \
+                 or is_end_game(state) \
+                 or self.evaluate(state) < self.current_eval - 3  # too bad # TODO determine appropriate value
         return cutoff
         # TODO cut states that are too bad
 
-    @lru_cache(maxsize=None)
-    def evaluate(self, state, details=False):
+    def evaluate(self, state, static=True, value=None, depth=None):  # TODO let static be variable
         """
         The evaluate function returns a value representing the utility function of the board.
         """
-        # TODO necessity to make eval fucnction symmetric ??
-        is_end = SeegaRules.is_end_game(state)
-        captured = state.score[self.ME] - state.score[self.OTHER]
-        other_is_stuck = state.phase == 2 and SeegaRules.is_player_stuck(state, self.OTHER)
-        control_center = state.board.get_cell_color((2, 2)) == self.color
+        if state not in self.state_evaluations:
+            static = self.static_evaluation(state)
+            self.state_evaluations[state] = (static, static if value is None else value, 0 if depth is None else depth)
 
-        # weights of liner interpolation of heuristics
-        w_end = 100 * (-1 if captured < 0 else (0 if captured == 0 else 1))
+        return self.state_evaluations[state][0 if static else 1]
+
+    def set_deeper_evatuation(self, state, value, depth):
+        if state not in self.state_evaluations:
+            self.evaluate(state, value=value, depth=depth)
+
+        current = self.state_evaluations[state]
+        self.state_evaluations[state] = (current[0], value, depth)
+
+    @lru_cache(maxsize=None)  # should not be used since evaluate() uses self.state_evaluations
+    def static_evaluation(self, state, details=False):
+        # boolean indicating if state is winnable by either player, regarding score (other winning possibility: boredom)
+        is_win = max(state.score.values()) >= state.MAX_SCORE - 1
+        # difference in number of captured pieces
+        sum_captured = state.score[self.ME] - state.score[self.OTHER]
+        # integer indicating which player is stuck (has no possible moves)
+        other_is_stuck = 0
+        if state.phase == 2:
+            if is_player_stuck(state, self.OTHER):
+                other_is_stuck = 1
+            elif is_player_stuck(state, self.ME):
+                other_is_stuck = -1
+        # integer indicating which player controls the center
+        control_center = state.board.get_cell_color((2, 2)).value * self.ME
+        # ratio of possible moved for each player
+        mobility = (1+len(get_possible_actions(state, self.ME))) \
+                   / (1+len(get_possible_actions(state, self.OTHER)))
+        # factor of density of the players' pieces
+        # (1 is relatively dense, -1 is relatively spread out, 0 is similar density for both players)
+        density = 0  # TODO
+        # factor of how much risk has to be taken to gain advantage (e.g. to avoir losing to boring moves)
+        risk = 0  # TODO
+        # TODO add depth penalty (want good score early)
+
+        # weights for liner interpolation of heuristics
+        w_win = self.winning_value * np.sign(sum_captured)
         w_capt = 1
-        w_stuck = 1
-        w_center = 0.6
+        w_stuck = 0.1
+        w_center = 0.001
+        w_mobility = -0.01
+        w_density = 0
+        w_risk = 0
+        # TODO determine appropriate weights
 
-        random = .001 * np.random.random()  # random is to avoid always taking the first move when there is a draw
         if not details:
-            return w_capt * captured + \
-                   w_stuck * (1 if other_is_stuck else 0) + \
-                   w_end * (1 if is_end else 0) + \
-                   w_center * (1 if control_center else 0) + \
-                   random
+            score = (w_win if is_win else 0) + \
+                    w_capt * sum_captured + \
+                    w_stuck * other_is_stuck + \
+                    w_center * control_center + \
+                    w_mobility * mobility + \
+                    w_density * density + \
+                    w_risk * risk
+            if score > self.winning_value:
+                self.reached_win = True
+            return score
         else:
-            return {'captured':         captured,
-                    'other_is_stuck':   other_is_stuck,
-                    'is_end':           is_end,
-                    'control_center':   control_center}
+            return {'is_win':         is_win,
+                    'sum_captured':   sum_captured,
+                    'other_is_stuck': other_is_stuck,
+                    'control_center': control_center,
+                    'mobility':       mobility,
+                    'density':        density,
+                    'risk':           risk}
 
     def compute_time_for_move(self):
         """
         Returns number of seconds allowed for the next move
+        NOTE : depth 3 takes around .3s
         """
-        return self.typical_time * .8  # TODO compute smart time
+        if self.remaining_time < self.max_time * 0.05:
+            print(f"NOT MUCH TIME LEFT - Limitting to depth 3")
+            self.absolute_max_depth = 3
+            return .2
+
+        moves_left = self.max_nb_moves - self.move_nb
+        time_for_move = self.remaining_time / moves_left
+        adjusted_time_for_move = time_for_move * (time_for_move/self.typical_time)
+        print('\033[44m' + f"Move nb : {self.move_nb:<5} - Remaining time : {self.remaining_time:<12} - Typical time : {self.typical_time:<12} - Time for move : {time_for_move:<12} - Adjusted time for move : {adjusted_time_for_move:<12}" + '\033[0m')
+        return adjusted_time_for_move
+        # TODO compute smart time : if repeating move : allow more in-depth search for longer vision
+
+    def find_symmetry_placement(self, state):
+        opponent_pieces = state.board.get_player_pieces_on_board(self.OTHER_color)
+        print(opponent_pieces)
+        symmetry_positions = [pos for symmetries in [state.get_symmetries(pos) for pos in opponent_pieces]
+                              for pos in symmetries]
+        # reorder symmetries (prefer pure symmetries)
+        symmetry_positions = symmetry_positions[::3] + symmetry_positions[1::3] + symmetry_positions[2::3]
+
+        return self.find_best_placement(state, from_indices=symmetry_positions)
+
+    def find_best_placement(self, state, from_indices=[]):
+        actions = get_possible_actions(state, self.ME)
+        for index in (from_indices + self.highest_values_indices):  # explicit indices preference then heatmap
+            for i, action in enumerate(actions):
+                if index == action.action['to']:
+                    return actions[i]
+
+        assert False, f"NO VALID ACTION FOUND"
 
     def iterative_deepening(self, state):
-        self.max_depth = 1  # reset
+        self.exploring_depth_limit = 1  # reset
         time_for_move = self.compute_time_for_move()
         start_time = time()
         best_action = None
 
-        while time() - start_time < time_for_move:
-            print(f" - EXPLORING DEPTH {self.max_depth} ... | Current best action : {best_action}")
+        while time() - start_time < time_for_move and self.exploring_depth_limit <= self.absolute_max_depth:
+            print(f" - EXPLORING DEPTH {self.exploring_depth_limit} ...",
+                  end=(' ' if self.exploring_depth_limit != 1 else '\n'))
+            self.explored_nodes = 0
             action = minimax_search(state, self)
+            print(f"{(' ' * 25) if self.exploring_depth_limit == 1 else ''}"
+                  f"| Explored {self.explored_nodes:>5} nodes "
+                  f"| Used {time() - start_time:>.4f}s", end=' ')
 
             if action is not None:
                 best_action = action
+                print(f"| New best action : {best_action}")
             else:
+                print(f"| No new action")
                 break
-            self.max_depth += 1
-            if self.max_depth > absolute_max_depth:
-                break
+            self.exploring_depth_limit += 1
+            # if self.reached_win or self.exploring_depth_limit > absolute_max_depth:
+            #     print(f" - END SEACH EARLY")
+            #     break
         return best_action
 
     def can_start_self_play(self, state):
@@ -251,7 +342,7 @@ class AI(Player):
         """
         # TODO do not do self_play if game can be won by exploring whole search tree till end (and win)
         other_actions = get_possible_actions(state, self.OTHER)
-        pieces_captured = self.evaluate(state, details=True)['captured']  # TODO optimize (no need to compute whole eval)
+        pieces_captured = self.static_evaluation(state, details=True)['captured']  # TODO optimize (no need to compute whole eval)
         if pieces_captured == state.MAX_SCORE - 1:  # other has only one piece left
             print("OTHER HAS ONLY ONE PIECE LEFT")
             self.repeat_boring_moves = True
@@ -274,16 +365,15 @@ class AI(Player):
         self.repeat_boring_moves = False
         return fallback_function(state)
 
-    def reverse_last_move(self, state):
+    def reverse_last_action(self):
         """
-        Returns the move resulting in the previous state, allowing for (boring) self-play
+        Returns the move that was played last time
         """
-        # TODO use self.last_action instead of state last action (in case last move was performed by opponent)
-        last_move = state.get_latest_move()
-        next_move = SeegaAction(action_type=SeegaActionType.MOVE,
-                                at=last_move['action']['to'],
-                                to=last_move['action']['at'])
-        return next_move
+        last_action = self.last_action
+        reversed_action = SeegaAction(action_type=SeegaActionType.MOVE,
+                                      at=last_action['action']['to'],
+                                      to=last_action['action']['at'])
+        return reversed_action
 
     """
     Specific methods for a Seega player (do not modify)
@@ -294,6 +384,7 @@ class AI(Player):
     def update_player_infos(self, infos):
         self.in_hand = infos['in_hand']
         self.score = infos['score']
+        # NOTE : called outside timer loop
 
     def reset_player_informations(self):
         self.in_hand = 12
@@ -323,6 +414,9 @@ def minimax_search(state, player):
         action = None
 
         for a, s in player.sorted_successors(state, maximize=True):
+            player.explored_nodes += 1
+            if player.exploring_depth_limit == 1:
+                print(f"   - {str(a):<65} : eval={player.evaluate(s):.2f}")
             if s.get_latest_player() == s.get_next_player():  # next turn is for the same player
                 val, _ = max_value(s, alpha, beta, depth + 1)
             else:                                             # next turn is for the other one
@@ -343,6 +437,7 @@ def minimax_search(state, player):
         action = None
 
         for a, s in player.sorted_successors(state, maximize=False):
+            player.explored_nodes += 1
             if s.get_latest_player() == s.get_next_player():  # next turn is for the same player
                 val, _ = min_value(s, alpha, beta, depth + 1)
             else:                                             # next turn is for the other one
