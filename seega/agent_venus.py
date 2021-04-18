@@ -89,6 +89,18 @@ class State(SeegaState):
         #        timeit.timeit(lambda: hash(str(self.board.get_board_state())), number=int(1e4)))
         #        timeit.timeit(lambda: hash(self.board.get_board_state().tobytes()), number=int(1e4)))
 
+    def get_symmetries(self, position):
+        def horizontal_sym(pos):
+            return pos[0], 4 - pos[1]
+
+        def vertical_sym(pos):
+            return 4 - pos[0], pos[1]
+
+        def pure_sym(pos):
+            return vertical_sym(horizontal_sym(pos))
+
+        return pure_sym(position), horizontal_sym(position), vertical_sym(position)
+
 
 class AI(Player):
 
@@ -122,6 +134,14 @@ class AI(Player):
         self.state_evaluations = dict()  # {state: (static_eval, dynamic_eval, dynamic_eval_depth)
         self.current_eval = 0
 
+        self.board_preferences = np.array([[60, 50, 99, 50, 60],
+                                           [50, 31, 90, 33, 50],
+                                           [99, 90, -1, 90, 99],
+                                           [50, 11, 90, 13, 50],
+                                           [60, 50, 99, 50, 60]])[::-1]
+        self.highest_values_indices = [np.unravel_index(i, self.board_preferences.shape)
+                                       for i in np.argsort(self.board_preferences, axis=None)][::-1]
+
     def play(self, state, remaining_time):
         self.move_nb += 1
         state.__class__ = State
@@ -146,7 +166,9 @@ class AI(Player):
         if len(possible_actions) == 1:
             best_action = possible_actions[0]
         elif state.phase == 1:
-            best_action = SeegaRules.random_play(state, self.ME)  # TODO play smart during phase 1
+            # best_action = SeegaRules.random_play(state, self.ME)
+            # best_action = self.find_best_placement(state)
+            best_action = self.find_symmetry_placement(state)
         else:  # phase == 2
             # TODO remove obsolete since stuck player fix
             # if self.can_start_self_play(state):
