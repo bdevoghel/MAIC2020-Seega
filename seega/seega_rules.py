@@ -280,6 +280,7 @@ class SeegaRules(Rule):
         if state.phase == 1:
             return False
         if SeegaRules.is_boring(state):
+            print("Boring game. Too many moves without caputures.")
             return True
         latest_player_score = state.score[state.get_latest_player()]
         if latest_player_score >= state.MAX_SCORE:
