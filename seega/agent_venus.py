@@ -36,6 +36,11 @@ def is_player_stuck(state, player_id):
     return SeegaRules.is_player_stuck(state, player_id)
 
 
+@lru_cache(maxsize=None)
+def get_opponent_neighbours(board, cell, player_id):
+    return SeegaRules._get_opponent_neighbours(board, cell, player_id)
+
+
 class State(SeegaState):
     def __repr__(self):
         return f"<State({self.phase}, {self.get_next_player()}, {self.board.get_board_state()})>"
@@ -126,7 +131,7 @@ class AI(Player):
         self.exploring_depth_limit = 1
         self.absolute_max_depth = 1000
 
-        self.repeat_boring_moves = False
+        self.playing_barrier = False
         self.reached_win = False
         self.last_action = None
         self.explored_nodes = 0
@@ -135,9 +140,9 @@ class AI(Player):
         self.current_eval = 0
 
         self.board_preferences = np.array([[60, 50, 99, 50, 60],
-                                           [50, 31, 90, 33, 50],
-                                           [99, 90, -1, 90, 99],
-                                           [50, 11, 90, 13, 50],
+                                           [50, 31,  1, 33, 50],
+                                           [99,  1, -1,  1, 99],
+                                           [50, 11,  1, 13, 50],
                                            [60, 50, 99, 50, 60]])[::-1]
         self.highest_values_indices = [np.unravel_index(i, self.board_preferences.shape)
                                        for i in np.argsort(self.board_preferences, axis=None)][::-1]
@@ -150,11 +155,9 @@ class AI(Player):
         print(f"- Cache evaluate   : {self.static_evaluation.cache_info()}")
         print(f"{state} evaluation={self.evaluate(state):.2f}\n")
 
-        # TODO remove obsolete since stuck player fix ; solution : create barrier when having upperhand
-        #  compute if state is safe but still has pieces to move, if upperhand : self_play
-        # if self.repeat_boring_moves:  # fast-forward to save time
-        #     print(" - PLAYING BARRIER")
-        #     return self.reverse_last_action()
+        if self.playing_barrier:  # fast-forward to save time
+            print("PLAYING BARRIER - Reversing last move")
+            return self.reverse_last_action()
 
         if self.max_time is None:
             self.max_time = remaining_time
@@ -166,16 +169,17 @@ class AI(Player):
         if len(possible_actions) == 1:
             best_action = possible_actions[0]
         elif state.phase == 1:
+            # TODO determine which is best starting policy
             # best_action = SeegaRules.random_play(state, self.ME)
             # best_action = self.find_best_placement(state)
             best_action = self.find_symmetry_placement(state)
         else:  # phase == 2
-            # TODO remove obsolete since stuck player fix
-            # if self.can_start_self_play(state):
-            #     best_action = self.make_self_play_move(state, fallback_function=self.iterative_deepening)
-            best_action = self.iterative_deepening(state)
+            if self.barrier_exists(state):
+                best_action = self.reverse_last_action()
+            else:
+                best_action = self.iterative_deepening(state)
 
-        print(f" - SELECTED ACTION : {best_action}")
+        print(f"SELECTED ACTION : {best_action}")
         self.last_action = best_action
         return best_action
 
@@ -221,9 +225,8 @@ class AI(Player):
                  or is_end_game(state) \
                  or self.evaluate(state) < self.current_eval - 3  # too bad # TODO determine appropriate value
         return cutoff
-        # TODO cut states that are too bad
 
-    def evaluate(self, state, static=True, value=None, depth=None):  # TODO let static be variable
+    def evaluate(self, state, static=True, value=None, depth=None):
         """
         The evaluate function returns a value representing the utility function of the board.
         """
@@ -233,7 +236,7 @@ class AI(Player):
 
         return self.state_evaluations[state][0 if static else 1]
 
-    def set_deeper_evatuation(self, state, value, depth):
+    def set_deeper_evatuation(self, state, value, depth):  # TODO set in code to be able to use deeper evaluations
         if state not in self.state_evaluations:
             self.evaluate(state, value=value, depth=depth)
 
@@ -308,7 +311,7 @@ class AI(Player):
         moves_left = self.max_nb_moves - self.move_nb
         time_for_move = self.remaining_time / moves_left
         adjusted_time_for_move = time_for_move * (time_for_move/self.typical_time)
-        print('\033[44m' + f"Move nb : {self.move_nb:<5} - Remaining time : {self.remaining_time:<12} - Typical time : {self.typical_time:<12} - Time for move : {time_for_move:<12} - Adjusted time for move : {adjusted_time_for_move:<12}" + '\033[0m')
+        print('\033[44m' + f"Move nb : {self.move_nb:<5} - Remaining time : {self.remaining_time:<8.4f} - Typical time : {self.typical_time:<8} - Time for move : {time_for_move:<8.4f} - Adjusted time for move : {adjusted_time_for_move:<8.4f}" + '\033[0m')
         return adjusted_time_for_move
         # TODO compute smart time : if repeating move : allow more in-depth search for longer vision
 
@@ -358,34 +361,44 @@ class AI(Player):
             #     break
         return best_action
 
-    def can_start_self_play(self, state):
-        """
-        If state is winnable by repeating boring moves, set repeat_boring_moves to True and return True
-        """
-        # TODO do not do self_play if game can be won by exploring whole search tree till end (and win)
-        other_actions = get_possible_actions(state, self.OTHER)
-        pieces_captured = self.static_evaluation(state, details=True)['captured']  # TODO optimize (no need to compute whole eval)
-        if pieces_captured == state.MAX_SCORE - 1:  # other has only one piece left
-            print("OTHER HAS ONLY ONE PIECE LEFT")
-            self.repeat_boring_moves = True
-            return True
+    # def can_start_self_play(self, state):
+    #     """
+    #     If state is winnable by repeating boring moves, set repeat_boring_moves to True and return True
+    #     """
+    #     # TODO do not do self_play if game can be won by exploring whole search tree till end (and win)
+    #     other_actions = get_possible_actions(state, self.OTHER)
+    #     pieces_captured = self.static_evaluation(state, details=True)['captured']  # TODO optimize (no need to compute whole eval)
+    #     if pieces_captured == state.MAX_SCORE - 1:  # other has only one piece left
+    #         print("OTHER HAS ONLY ONE PIECE LEFT")
+    #         self.repeat_boring_moves = True
+    #         return True
+    #
+    #     if len(other_actions) == 0 and pieces_captured > 0:  # opponent is blocked and has less captured pieces
+    #         print("OTHER IS BLOCKED AND SELF HAS ADVANTAGE")
+    #         self.repeat_boring_moves = True
+    #         return True
+    #
+    #     return False
 
-        if len(other_actions) == 0 and pieces_captured > 0:  # opponent is blocked and has less captured pieces
-            print("OTHER IS BLOCKED AND SELF HAS ADVANTAGE")
-            self.repeat_boring_moves = True
-            return True
+    # def make_self_play_move(self, state, fallback_function):
+    #     for action, s in self.successors(state):
+    #         if is_player_stuck(s, self.OTHER):
+    #             print(" - SELF PLAY MOVE FOUND")
+    #             return action
+    #
+    #     print(" - NO SELF PLAY MOVE FOUND, CONTINUE")
+    #     self.repeat_boring_moves = False
+    #     return fallback_function(state)
+
+    def barrier_exists(self, state):
+        favorable_score = state.score[self.ME] - state.score[self.OTHER] >= 0
+        if favorable_score:
+            has_free_moving_piece = False
+            if has_free_moving_piece:
+                self.playing_barrier = True
+                return True
 
         return False
-
-    def make_self_play_move(self, state, fallback_function):
-        for action, s in self.successors(state):
-            if is_player_stuck(s, self.OTHER):
-                print(" - SELF PLAY MOVE FOUND")
-                return action
-
-        print(" - NO SELF PLAY MOVE FOUND, CONTINUE")
-        self.repeat_boring_moves = False
-        return fallback_function(state)
 
     def reverse_last_action(self):
         """
